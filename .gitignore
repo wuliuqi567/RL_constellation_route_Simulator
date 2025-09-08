@@ -1,2 +1,13 @@
 # .gitignore
 *.h5
+*.pyc
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+.env
+.vscode/
+logs/
+**/__pycache__/
+xuance.egg-info/
+.eggs/
+.idea/

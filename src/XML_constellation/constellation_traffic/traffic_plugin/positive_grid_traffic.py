@@ -329,7 +329,7 @@ def positive_grid_traffic(constellation, time_slot,
     global user_connect_sat, sat_connect_gs, flows, flows_selected
     global flows_cumulate_weight, flows_sum_weight, flows_num
     global isl_sender_traffic, isl_receiver_traffic
-
+    
 
     cons_name = constellation.constellation_name
     shell = constellation.shells[0] # the first shell
