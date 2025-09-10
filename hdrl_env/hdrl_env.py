@@ -13,10 +13,10 @@ from copy import deepcopy
 # 1. 初始化环境 
 
 
-class SingleEnvXC(RawEnvironment):
+class HdrlEnv(RawEnvironment):
     metadata = {'render_modes': ['human', 'ansi'], 'render_fps': 4} # Example render modes
     def __init__(self, env_config):
-        super(SingleEnvXC, self).__init__()
+        super(HdrlEnv, self).__init__()
         self.env_id = env_config.env_id  # The environment id.
         self.observation_space = Box(-np.inf, np.inf, shape=[18, ])  # Define observation space.
         self.action_space = Box(-np.inf, np.inf, shape=[5, ])  # Define action space. In this example, the action space is continuous.
@@ -31,7 +31,7 @@ class SingleEnvXC(RawEnvironment):
         # init all domians' nn model
         self.nnmodel = self.init_neural_network()
         # based on possion distribution to generate traffic
-        self.walker_delta_net.randomGenFlows()
+        # self.walker_delta_net.randomGenFlows()
         
     def init_neural_network(self):
         temp_model = []
@@ -60,4 +60,24 @@ class SingleEnvXC(RawEnvironment):
     def close(self):  # Close your environment.
         return
     
-    def router(self, )
+    def router(self):
+        pass
+    
+    # update survival time and remove expired flows
+    def update_flows(self):
+        self.walker_delta_net.traffic_manager.update_flow_survival_times()
+        self.walker_delta_net.update_isl_state()
+    
+    def inject_new_flows(self):
+        self.walker_delta_net.randomGenFlows()
+        self.walker_delta_net.inject_flows()
+        
+    
+    def update_whole_network_state(self):
+        self.update_flows()
+        self.inject_new_flows()
+        
+        
+    
+    
+    

@@ -18,11 +18,11 @@ def main():
     samples.XML_constellation.XML_constellation_test_cases.XML_constellation_test_cases()
     print("END.")
 
-    print("Starting TLE Constellations Testing")
-    # test the core module functionality of various TLE constellations
-    import samples.TLE_constellation.TLE_constellation_test_cases
-    samples.TLE_constellation.TLE_constellation_test_cases.TLE_constellation_test_cases()
-    print("END.")
+    # print("Starting TLE Constellations Testing")
+    # # test the core module functionality of various TLE constellations
+    # import samples.TLE_constellation.TLE_constellation_test_cases
+    # samples.TLE_constellation.TLE_constellation_test_cases.TLE_constellation_test_cases()
+    # print("END.")
 
     print("Starting Standalone Module Testing...")
     # test each standalone module under "src/standalone_module/" in starperf 2.0

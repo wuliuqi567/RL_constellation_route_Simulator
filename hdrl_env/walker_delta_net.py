@@ -12,6 +12,9 @@ except ImportError as e:
     print("Please ensure the src directory is in the Python path")
     raise
 
+import src.XML_constellation.constellation_connectivity.connectivity_mode_plugin_manager as connectivity_mode_plugin_manager
+import src.XML_constellation.constellation_evaluation.exists_ISL.delay as DELAY
+import src.XML_constellation.constellation_routing.routing_policy_plugin_manager as routing_policy_plugin_manager
 import math
 import networkx as nx
 import numpy as np
@@ -76,6 +79,7 @@ class WalkerDeltaNet:
         # Flow management
         self.flows = []  # all candidate flows
         self.flows_selected = {}  # selected flows
+        self.curr_genflow_id = 0
         self.flows_num = 0
         self.flows_cumulate_weight = []
         self.flows_sum_weight = 0
@@ -115,6 +119,13 @@ class WalkerDeltaNet:
         # Generate the constellation
         constellation = constellation_configuration.constellation_configuration(
             dT=100, constellation_name=constellation_name)
+        connectionModePluginManager = connectivity_mode_plugin_manager.connectivity_mode_plugin_manager()
+        # execute the connectivity mode and build ISLs between satellites
+        connectionModePluginManager.execute_connection_policy(constellation=constellation , dT=100)
+        # initialize the routing policy plugin manager
+        routingPolicyPluginManager = routing_policy_plugin_manager.routing_policy_plugin_manager()
+        routingPolicyPluginManager.set_routing_policy("satellite_connection_graph")
+        self.cur_timeslot_only_sat_con_graph = routingPolicyPluginManager.execute_connection_policy(constellation_name , constellation.shells[0], 1)
         
         print('\t\t\tDetails of the constellations are as follows :')
         print('\t\t\tThe name of the constellation is : ', constellation.constellation_name)
@@ -297,8 +308,6 @@ class WalkerDeltaNet:
     def randomGenFlows(self, arrival_rate=10, time_interval=1.0):
         """Generate random traffic flows based on Poisson distribution"""
         
-        flow_id = 0
-        
         # Generate service requests using Poisson distribution
 
         requests = generate_service_requests(arrival_rate, time_interval)
@@ -306,7 +315,7 @@ class WalkerDeltaNet:
             [requests], traffic_demand_low=10, traffic_demand_high=40)[0]
         
         # select source and destination for each flow based on the number of population in each user block
-        for _ in range(traffic_demands):
+        for i in range(traffic_demands):
             if sum(self.pop_count) == 0:
                 print("No traffic demand in this time slot.")
                 break
@@ -331,15 +340,113 @@ class WalkerDeltaNet:
                 print(f"Dest Block {dest_block} cannot be served, skipping this flow.")
                 continue
             
+            # random init survival time between 7-10 seconds
+            survival_time = random.randint(7, 10)
+            
             flow_bandwidth = random.randint(10, 40)
-            flow = TrafficFlow(flow_id, source_block, dest_block, flow_bandwidth)
+            
+            flow = TrafficFlow(self.curr_genflow_id, source_block, dest_block, flow_bandwidth, survival_time)
+            self.curr_genflow_id += 1
             self.traffic_manager.add_flow(flow)
+            
         
-        self.flows = traffic_manager.get_all_flows()
-        self.flows_num = len(self.flows)
-        print(f"Generated {self.flows_num} traffic flows.")
+        self.flows_num = self.traffic_manager.get_number_of_flows()
 
+        print(f"Total Generated {self.flows_num} traffic flows.")
+        print(f"current generated flow count: {traffic_demands}")
 
+    def inject_flows(self):
+        """Inject newly generated flows into the network"""
+        new_flows = self.traffic_manager.tobe_assigned_flows
+        if not new_flows:
+            print("No new flows to inject.")
+            return
+        
+        for flow in new_flows:
+            print(f"Injecting Flow ID {flow.id}: Source Block {flow.source} -> Dest Block {flow.destination}, "
+                  f"Bandwidth {flow.flow_rate} Mbps, Survival Time {flow.survival_time}s")
+            shorest_path = self.calculate_routing_path(flow.source, flow.destination)
+            flow.path = shorest_path
+            
+        
+        # according to the assigned path, update the ISL and satellite traffic
+        self.assign_flows_to_network(self)
+        
+        self.traffic_manager.merge_assinged_flows()
+        print(f"Total flows after injection: {self.traffic_manager.get_number_of_flows()}")
+    
+    def assign_flows_to_network(self, flows):
+        """Assign flows to the network and update traffic states"""
+        for flow in flows:
+            path = flow.path
+            flow_rate = flow.flow_rate
+            
+            if not path or flow_rate <= 0:
+                print(f"Flow ID {flow.id} has invalid path or flow rate, skipping assignment.")
+                continue
+            
+            # Update traffic on each link in the flow's path
+            for i in range(len(path) - 1):
+                sat_i = path[i]
+                sat_j = path[i + 1]
+                
+                utilizaiton = self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization']
+                capacity = self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['capacity']
+                
+                if utilizaiton + flow_rate > capacity:
+                    print(f"Flow ID {flow.id} cannot be assigned due to capacity constraints on link {sat_i}-{sat_j}.")
+                    break
+                
+                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization'] += flow_rate
+                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['available_bandwidth'] = max(
+                    0, self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['capacity'] - self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization']
+                )
+                
+                
+    
+    def update_isl_state(self):
+        """
+            update ISL bandwidth based on current expired flows
+        """
+        expired_flows = self.traffic_manager.get_expired_flows()
+        for flow in expired_flows:
+            flow_path = flow.path
+            flow_rate = flow.flow_rate
+            if not flow_path or flow_rate <= 0:
+                continue
+            for i in range(len(flow_path) - 1):
+                sat_i = flow_path[i]
+                sat_j = flow_path[i + 1]
+                
+                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization'] = max(
+                    0, self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization'] - flow_rate
+                )
+                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['available_bandwidth'] = min(
+                    self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['capacity'],
+                    self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['available_bandwidth'] + flow_rate
+                )
+            
+                
+    def calculate_routing_path(self, source_sat, dest_sat):
+        """_summary_
+
+        Args:
+            source_sat (s_sat_id): "1"
+            dest_sat (_type_): "10"
+        """
+        if isinstance(source_sat, int) or isinstance(dest_sat, int):
+            str_source_sat = "satellite_" + str(source_sat)
+            str_dest_sat = "satellite_" + str(dest_sat)
+        else:
+            str_source_sat = source_sat
+            str_dest_sat = dest_sat
+        
+        
+        path = nx.dijkstra_path(self.cur_timeslot_only_sat_con_graph, source=str_source_sat, target=str_dest_sat)
+        return path
+    
+        
+        
 if __name__ == "__main__":
     walker_net = WalkerDeltaNet()
 

@@ -67,3 +67,8 @@ class routing_policy_plugin_manager:
         function = self.plugins[self.current_routing_policy]
         target_routing_path = function(constellation_name , source , target , sh , t)
         return target_routing_path
+    
+    def execute_connection_policy(self , constellation_name , sh , t=1):
+        function = self.plugins[self.current_routing_policy]
+        only_sat_con_graph = function(constellation_name , sh , t)
+        return only_sat_con_graph
