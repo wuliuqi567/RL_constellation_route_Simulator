@@ -45,7 +45,7 @@ def read_xml_file(file_path):
 # constellation_name : the name of the constellation to be generated, used to read the xml configuration file
 def constellation_configuration(dT , constellation_name):
     # the path to the constellation configuration information file .xml file
-    xml_file_path = "config/XML_constellation/" + constellation_name + ".xml"
+    xml_file_path = "/home/wmq/Desktop/RL_constellation_route_Simulator/config/XML_constellation/" + constellation_name + ".xml"
     # read constellation configuration information
     constellation_configuration_information = read_xml_file(xml_file_path)
     # convert string to int type

@@ -2,7 +2,7 @@ from .mlp import Basic_Identical, Basic_MLP
 from .cnn import Basic_CNN, AC_CNN_Atari
 from .rnn import Basic_RNN
 from .gnn import Basic_GAT
-from .mpnn import Basic_MPNN, MultiRound_MPNN
+from .mpnn import Basic_MPNN, MultiRound_MPNN, Basic_MPNN_EDGE, MultiRound_MPNN_EDGE
 
 REGISTRY_Representation = {
     "Basic_Identical": Basic_Identical,
@@ -12,7 +12,9 @@ REGISTRY_Representation = {
     "Basic_RNN": Basic_RNN,
     "Basic_GAT": Basic_GAT,
     "Basic_MPNN": Basic_MPNN,
-    "MultiRound_MPNN": MultiRound_MPNN
+    "MultiRound_MPNN": MultiRound_MPNN,
+    "Basic_MPNN_EDGE": Basic_MPNN_EDGE,
+    "MultiRound_MPNN_EDGE": MultiRound_MPNN_EDGE
 }
 
 __all__ = [
@@ -22,5 +24,7 @@ __all__ = [
     "Basic_RNN",
     "Basic_GAT",
     "Basic_MPNN",
-    "MultiRound_MPNN"
+    "MultiRound_MPNN",
+    "Basic_MPNN_EDGE",
+    "MultiRound_MPNN_EDGE"
 ]

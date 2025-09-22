@@ -22,8 +22,8 @@ import random
 import json
 import h5py
 from copy import deepcopy
-from hdrl_env.flow import TrafficFlow, TrafficFlowsManager
-from hdrl_env.poisson import generate_service_requests, generate_service_requests_batch, generate_service_tarffic_bandwidth_demand
+from flow import TrafficFlow, TrafficFlowsManager
+from poisson import generate_service_requests, generate_service_requests_batch, generate_service_tarffic_bandwidth_demand
 class WalkerDeltaNet:
     """
     Walker Delta constellation network class for satellite routing simulation
@@ -84,8 +84,19 @@ class WalkerDeltaNet:
         self.flows_cumulate_weight = []
         self.flows_sum_weight = 0
         self.constellation = self.constellation_generation()
+        self.gen_nx_graph(self.constellation)
         self.traffic_manager = TrafficFlowsManager()
 
+    def reset_net(self):
+        self.clear_attr_graph()
+        self.traffic_manager.reset()
+    
+    def clear_attr_graph(self):
+        for edge in list(self.cur_timeslot_only_sat_con_graph.edges):
+            self.cur_timeslot_only_sat_con_graph.edges[edge]['occupied_bandwidth'] = 0
+            self.cur_timeslot_only_sat_con_graph.edges[edge]['utilization'] = 0.0
+            self.cur_timeslot_only_sat_con_graph.edges[edge]['available_bandwidth'] = self.cur_timeslot_only_sat_con_graph.edges[edge]['capacity']
+    
     def cir_to_car_np(self, lat, lng, h):
         """Convert circular coordinates to Cartesian coordinates"""
         x = (self.RADIUS + h) * math.cos(math.radians(lat)) * math.cos(
@@ -123,9 +134,6 @@ class WalkerDeltaNet:
         # execute the connectivity mode and build ISLs between satellites
         connectionModePluginManager.execute_connection_policy(constellation=constellation , dT=100)
         # initialize the routing policy plugin manager
-        routingPolicyPluginManager = routing_policy_plugin_manager.routing_policy_plugin_manager()
-        routingPolicyPluginManager.set_routing_policy("satellite_connection_graph")
-        self.cur_timeslot_only_sat_con_graph = routingPolicyPluginManager.execute_connection_policy(constellation_name , constellation.shells[0], 1)
         
         print('\t\t\tDetails of the constellations are as follows :')
         print('\t\t\tThe name of the constellation is : ', constellation.constellation_name)
@@ -233,6 +241,13 @@ class WalkerDeltaNet:
             self.sat_connect_gs.append(min_dis_sat) 
         return constellation
     
+    def gen_nx_graph(self, constellation):
+        constellation_name = "walker_delta_144"
+        routingPolicyPluginManager = routing_policy_plugin_manager.routing_policy_plugin_manager()
+        routingPolicyPluginManager.set_routing_policy("satellite_connection_graph")
+        self.cur_timeslot_only_sat_con_graph = routingPolicyPluginManager.execute_connection_policy(constellation_name , constellation.shells[0], 1)
+        
+    
     def partition_square_domain(self, row=4, col=4, num_orbs=12, num_sats_per_orb=12):
         """
         Partition the constellation into domains using a grid layout.
@@ -258,7 +273,7 @@ class WalkerDeltaNet:
                         
                         # Calculate global satellite ID
                         satellite_id = orbit_idx * num_sats_per_orb + sat_idx
-                        domain_satellites.append(satellite_id)
+                        domain_satellites.append(satellite_id+1)
                 
                 domains.append(sorted(domain_satellites))
         
@@ -355,6 +370,37 @@ class WalkerDeltaNet:
         print(f"Total Generated {self.flows_num} traffic flows.")
         print(f"current generated flow count: {traffic_demands}")
 
+    def gen_each_domain_flows(self, domain_id, arrival_rate=10, time_interval=1.0):
+        """Generate traffic flows for a specific domain"""
+        if domain_id < 0 or domain_id >= len(self.all_domains):
+            raise ValueError("Invalid domain ID")
+        
+        domain_satellites = self.all_domains[domain_id]
+        requests = generate_service_requests(arrival_rate, time_interval, random_seed=10)
+        traffic_demands = generate_service_tarffic_bandwidth_demand(
+            [requests], traffic_demand_low=10, traffic_demand_high=40)[0]
+        
+        for each_flow_bandwidth in traffic_demands:
+            
+            source_sat = 'satellite_' + str(random.choice(domain_satellites))
+            dest_sat = 'satellite_' + str(random.choice(domain_satellites))
+            while True:
+                if source_sat == dest_sat:
+                    dest_sat = 'satellite_' + str(random.choice(domain_satellites))
+                else:
+                    break
+
+            survival_time = random.randint(7, 10)
+            flow_bandwidth = each_flow_bandwidth
+            
+            flow = TrafficFlow(self.curr_genflow_id, source_sat, dest_sat, flow_bandwidth, survival_time)
+            self.curr_genflow_id += 1
+            self.traffic_manager.add_flow(flow)
+        
+        self.flows_num = self.traffic_manager.get_number_of_flows()
+        # print(f"Total Generated {self.flows_num} traffic flows after adding domain {domain_id}.")
+
+
     def inject_flows(self):
         """Inject newly generated flows into the network"""
         new_flows = self.traffic_manager.tobe_assigned_flows
@@ -390,16 +436,20 @@ class WalkerDeltaNet:
                 sat_i = path[i]
                 sat_j = path[i + 1]
                 
-                utilizaiton = self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization']
+                # utilization = self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization']
+                occupied_bandwidth = self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['occupied_bandwidth']
                 capacity = self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['capacity']
                 
-                if utilizaiton + flow_rate > capacity:
+                if occupied_bandwidth + flow_rate > capacity:
                     print(f"Flow ID {flow.id} cannot be assigned due to capacity constraints on link {sat_i}-{sat_j}.")
                     break
                 
-                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization'] += flow_rate
+                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['occupied_bandwidth'] += flow_rate
+                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization'] = min(
+                    1.0, (self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['occupied_bandwidth']) / capacity
+                )
                 self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['available_bandwidth'] = max(
-                    0, self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['capacity'] - self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization']
+                    0, self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['capacity'] - self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['occupied_bandwidth']
                 )
                 
                 
@@ -418,14 +468,20 @@ class WalkerDeltaNet:
                 sat_i = flow_path[i]
                 sat_j = flow_path[i + 1]
                 
-                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization'] = max(
-                    0, self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization'] - flow_rate
+                # Update occupied bandwidth first
+                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['occupied_bandwidth'] = max(
+                    0, self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['occupied_bandwidth'] - flow_rate
                 )
-                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['available_bandwidth'] = min(
-                    self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['capacity'],
-                    self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['available_bandwidth'] + flow_rate
-                )
-            
+                
+                # Recalculate utilization based on occupied bandwidth
+                capacity = self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['capacity']
+                occupied_bandwidth = self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['occupied_bandwidth']
+                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['utilization'] = occupied_bandwidth / capacity if capacity > 0 else 0.0
+                
+                # Update available bandwidth
+                self.cur_timeslot_only_sat_con_graph[sat_i][sat_j]['available_bandwidth'] = capacity - occupied_bandwidth
+        
+        self.traffic_manager.clear_expired_flows()
                 
     def calculate_routing_path(self, source_sat, dest_sat):
         """_summary_
@@ -445,7 +501,48 @@ class WalkerDeltaNet:
         path = nx.dijkstra_path(self.cur_timeslot_only_sat_con_graph, source=str_source_sat, target=str_dest_sat)
         return path
     
+    
+    def get_domain_state(self, domain_id):
+        """Get the current state of a specific domain"""
+        if domain_id < 0 or domain_id >= len(self.all_domains):
+            raise ValueError("Invalid domain ID")
         
+        domain_satellites = self.all_domains[domain_id]
+        subdomain_graph = self.cur_timeslot_only_sat_con_graph.subgraph(
+            [f"satellite_{sat}" for sat in domain_satellites])
+        
+        domain_state = {}
+        
+        for sat in domain_satellites:
+            sat_node = f"satellite_{sat}"
+            if sat_node in self.cur_timeslot_only_sat_con_graph:
+                domain_state[sat] = deepcopy(self.cur_timeslot_only_sat_con_graph[sat_node])
+            else:
+                print(f"Satellite {sat} not found in the current network graph.")
+        
+        return domain_state
+    
+    def get_subdomain_graph(self, domain_id):
+        """Get the subgraph of a specific domain"""
+        if domain_id < 0 or domain_id >= len(self.all_domains):
+            raise ValueError("Invalid domain ID")
+        
+        domain_satellites = self.all_domains[domain_id]
+        # get the subgraph for the domain, including all edges between its satellites
+        # 
+        subdomain_graph = self.cur_timeslot_only_sat_con_graph.subgraph(
+            [f"satellite_{sat}" for sat in domain_satellites])
+        
+        return subdomain_graph
+    
+    def get_edges_utilization(self):
+        """Get the utilization of all edges in the current network graph"""
+        edge_utilizations = {}
+        for u, v, data in self.cur_timeslot_only_sat_con_graph.edges(data=True):
+            # print(f"Edge {u}-{v} data: {data}")
+            edge_utilizations[(u, v)] = data.get('utilization', 0.0)
+            print(f"Edge {u}-{v}: Utilization {edge_utilizations[(u, v)]:.2f}")
+        return edge_utilizations
         
 if __name__ == "__main__":
     walker_net = WalkerDeltaNet()

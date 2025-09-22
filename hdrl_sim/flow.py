@@ -17,22 +17,8 @@ class TrafficFlow:
         self._id = id
         self._init_survival_time = survival_time
         self._survival_time = survival_time
-        self.current_flow = 0
         self._path = []  # 初始化私有属性，而不是公共属性
 
-    def update_flow(self, time_interval):
-        """
-        Update the current flow based on the flow rate and time interval.
-
-        :param time_interval: The time interval over which to update the flow.
-        """
-        self.current_flow += self.flow_rate * time_interval
-
-    def reset_flow(self):
-        """
-        Reset the current flow to zero.
-        """
-        self.current_flow = 0
 
     @property
     def id(self):
@@ -113,6 +99,35 @@ class TrafficFlow:
         """
         self._path = []
     
+
+    @property
+    def states(self):
+        """
+        Get the current state of the traffic flow as a list.
+        """
+        num_of_orbit_src = self._source//12 / 11
+        sat_of_orbit_src = self._source % 12 /11
+        
+        num_of_orbit_des = self._destination // 12 /11
+        sat_of_orbit_des = self._destination % 12  /11
+        
+        # flow bandwidth demand from 10Mbps to 40Mbps
+        
+        normal_bd = (self.flow_rate-10) / 30
+        # survival time between 7-10 seconds
+        st = (self._survival_time - 7) / 3
+        
+        flow_states = [num_of_orbit_src, sat_of_orbit_src, num_of_orbit_des, sat_of_orbit_des, normal_bd, st]
+        return flow_states
+        
+        # return {
+        #     "source": self._source,
+        #     "destination": self._destination,
+        #     "flow_rate": self._flow_rate,
+        #     "survival_time": self._survival_time,
+        # }
+
+
     def __str__(self):
         """
         Return a string representation of the traffic flow.
@@ -133,6 +148,15 @@ class TrafficFlowsManager:
         self.flows = []
         self.expired_flows = []
         self.tobe_assigned_flows = []
+        self.finished_flows = []
+        
+    def reset(self):
+        """
+        Reset the TrafficFlowsManager to its initial state.
+        """
+        self.flows = []
+        self.expired_flows = []
+        self.tobe_assigned_flows = []
 
     def add_flow(self, flow):
         """
@@ -145,7 +169,7 @@ class TrafficFlowsManager:
         else:
             raise TypeError("Only TrafficFlow instances can be added")
         
-    def merge_assinged_flows(self):
+    def merge_assigned_flows(self):
         """
         Merge the to-be-assigned flows into the main flows list.
         """
@@ -171,6 +195,13 @@ class TrafficFlowsManager:
         :return: A list of expired TrafficFlow instances.
         """
         return self.expired_flows.copy()
+
+    def clear_expired_flows(self):
+        """
+        move the list of expired traffic flows to finished flows
+        """
+        self.finished_flows.extend(self.expired_flows)
+        self.expired_flows = []
 
     def get_all_flows(self):
         """

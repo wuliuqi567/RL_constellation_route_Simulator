@@ -38,9 +38,9 @@ def satellite_connection_graph(constellation_name, sh, t):
                     delay=delay[i][j],
                     distance=distance,
                     capacity=capacity,
-                    bandwidth=capacity,
+                    occupied_bandwidth=0,  # 初始占用带宽
                     link_type=link_type,
-                    utilization=0.0,  # 初始利用率
+                    utilization=0.0,  # 初始利用率 占用的带宽/总容量（带宽）
                     available_bandwidth=capacity
                 )
 

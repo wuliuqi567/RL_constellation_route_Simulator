@@ -1,7 +1,7 @@
 import os
 import torch
-# import swanlab as wandb
-import wandb
+import swanlab as wandb
+# import wandb
 import socket
 import numpy as np
 import torch.distributed as dist
@@ -88,39 +88,40 @@ class Agent(ABC):
         self.model_dir_save = os.path.join(os.getcwd(), config.model_dir, seed + time_string)
 
         # Create logger.
-        if config.logger == "tensorboard":
-            log_dir = os.path.join(os.getcwd(), config.log_dir, seed + time_string)
-            if self.rank == 0:
-                create_directory(log_dir)
-            else:
-                while not os.path.exists(log_dir):
-                    pass  # Wait until the master process finishes creating directory.
-            self.writer = SummaryWriter(log_dir)
-            self.use_wandb = False
-        elif config.logger == "wandb":
-            config_dict = vars(config)
-            log_dir = config.log_dir
-            wandb_dir = Path(os.path.join(os.getcwd(), config.log_dir))
-            if self.rank == 0:
-                create_directory(str(wandb_dir))
-            else:
-                while not os.path.exists(str(wandb_dir)):
-                    pass  # Wait until the master process finishes creating directory.
-            wandb.init(config=config_dict,
-                       project=config.project_name,
-                       entity=config.wandb_user_name,
-                       notes=socket.gethostname(),
-                       dir=wandb_dir,
-                       group=config.env_id,
-                       job_type=config.agent,
-                       name=time_string,
-                       reinit=True,
-                       settings=wandb.Settings(start_method="fork")
-                       )
-            # os.environ["WANDB_SILENT"] = "True"
-            self.use_wandb = True
-        else:
-            raise AttributeError("No logger is implemented.")
+        # if config.logger == "tensorboard":
+        #     log_dir = os.path.join(os.getcwd(), config.log_dir, seed + time_string)
+        #     if self.rank == 0:
+        #         create_directory(log_dir)
+        #     else:
+        #         while not os.path.exists(log_dir):
+        #             pass  # Wait until the master process finishes creating directory.
+        #     self.writer = SummaryWriter(log_dir)
+        #     self.use_wandb = False
+        # elif config.logger == "wandb":
+        #     config_dict = vars(config)
+        #     log_dir = config.log_dir
+        #     wandb_dir = Path(os.path.join(os.getcwd(), config.log_dir))
+        #     if self.rank == 0:
+        #         create_directory(str(wandb_dir))
+        #     else:
+        #         while not os.path.exists(str(wandb_dir)):
+        #             pass  # Wait until the master process finishes creating directory.
+        #     wandb.init(config=config_dict,
+        #                project=config.project_name,
+        #                entity=config.wandb_user_name,
+        #                notes=socket.gethostname(),
+        #                dir=wandb_dir,
+        #                group=config.env_id,
+        #                job_type=config.agent,
+        #                name=time_string,
+        #                reinit=True,
+        #                settings=wandb.Settings(start_method="fork")
+        #                )
+        #     # os.environ["WANDB_SILENT"] = "True"
+        #     self.use_wandb = True
+        # else:
+        #     raise AttributeError("No logger is implemented.")
+        log_dir = config.log_dir
         self.log_dir = log_dir
 
         # Prepare necessary components.

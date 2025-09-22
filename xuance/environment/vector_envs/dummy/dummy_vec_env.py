@@ -22,7 +22,7 @@ class DummyVecEnv(VecEnv):
         VecEnv.__init__(self, len(env_fns), env.observation_space, env.action_space)
 
         self.obs_shape = space2shape(self.observation_space)
-        self.obs_shape_low = space2shape(env.observation_space_low) if hasattr(env, 'observation_space_low') else None
+        self.obs_shape_low = None
         if isinstance(self.observation_space, Dict):
             self.buf_obs = {k: np.zeros(combined_shape(self.num_envs, v)) for k, v in
                             zip(self.obs_shape.keys(), self.obs_shape.values())}
@@ -47,6 +47,20 @@ class DummyVecEnv(VecEnv):
         self.buf_truncated = np.zeros((self.num_envs,), dtype=np.bool_)
         self.buf_rewards = np.zeros((self.num_envs,), dtype=np.float32)
         return self.buf_obs.copy(), self.buf_info.copy()
+    
+    def reset_obs(self):
+        for e in range(self.num_envs):
+            obs, info = self.envs[e].reset_obs()
+            self._save_obs(e, obs)
+            self._save_infos(e, info)
+    
+    def set_env_attributes(self, attributes: dict):
+        for each_env in self.envs:
+            each_env.set_env_attributes(attributes)
+    
+    def get_env_attributes(self):
+        attribute_keys = ['edge_index']
+        return self.envs[0].get_env_attributes(attribute_keys)
 
     def step_async(self, actions):
         if self.waiting:

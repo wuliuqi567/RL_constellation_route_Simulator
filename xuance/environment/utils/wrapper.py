@@ -18,6 +18,16 @@ class XuanCeEnvWrapper:
         self._episode_step = 0
         self._episode_score = 0.0
 
+    def set_env_attributes(self, attributes: dict):
+        for key, value in attributes.items():
+            setattr(self.env, key, value)
+    
+    def get_env_attributes(self, attribute_keys: list):
+        
+        for key in attribute_keys:
+            value = getattr(self.env, key, None)
+        return value
+    
     @property
     def action_space(self):
         """Returns the action space of the environment."""
@@ -112,6 +122,15 @@ class XuanCeEnvWrapper:
         self._episode_step = 0
         self._episode_score = 0.0
         info["episode_step"] = self._episode_step
+        return obs, info
+    
+    def reset_obs(self, **kwargs):
+        """Resets the environment with kwargs."""
+        try:
+            obs, info = self.env.reset_obs(**kwargs)
+        except:
+            obs = self.env.reset_obs(**kwargs)
+            info = {}
         return obs, info
 
     def render(self, *args, **kwargs):

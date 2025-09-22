@@ -11,3 +11,8 @@ logs/
 xuance.egg-info/
 .eggs/
 .idea/
+logs/
+models/
+hdrl_sim/logs/
+hdrl_sim/models/
+hdrl_sim/test/*
