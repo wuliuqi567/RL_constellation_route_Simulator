@@ -241,6 +241,9 @@ class WalkerDeltaNet:
             self.sat_connect_gs.append(min_dis_sat) 
         return constellation
     
+    def get_net_graph(self):
+        return self.cur_timeslot_only_sat_con_graph
+    
     def gen_nx_graph(self, constellation):
         constellation_name = "walker_delta_144"
         routingPolicyPluginManager = routing_policy_plugin_manager.routing_policy_plugin_manager()
@@ -541,8 +544,13 @@ class WalkerDeltaNet:
         for u, v, data in self.cur_timeslot_only_sat_con_graph.edges(data=True):
             # print(f"Edge {u}-{v} data: {data}")
             edge_utilizations[(u, v)] = data.get('utilization', 0.0)
-            print(f"Edge {u}-{v}: Utilization {edge_utilizations[(u, v)]:.2f}")
-        return edge_utilizations
+            # print(f"Edge {u}-{v}: Utilization {edge_utilizations[(u, v)]:.2f}")
+        
+        # calculate average utilization and max utilization
+        avg_utilization = np.mean(list(edge_utilizations.values()))
+        max_utilization = np.max(list(edge_utilizations.values()))
+        print(f"Average Edge Utilization: {avg_utilization:.2f}, Max Edge Utilization: {max_utilization:.2f}")
+
         
 if __name__ == "__main__":
     walker_net = WalkerDeltaNet()

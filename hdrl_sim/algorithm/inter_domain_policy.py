@@ -15,7 +15,7 @@ from xuance.torch.utils import nn, NormalizeFunctions, ActivationFunctions, init
 from torch_geometric.utils import to_undirected
 
 
-class GNNActorCriticPolicy(Module):
+class InterDomain_Policy(Module):
     """
     Actor-Critic for stochastic policy with categorical distributions. (Discrete action space)
 
@@ -42,7 +42,7 @@ class GNNActorCriticPolicy(Module):
                  device: Optional[Union[str, int, torch.device]] = None,
                  use_distributed_training: bool = False,
                  **kwargs):
-        super(GNNActorCriticPolicy, self).__init__()
+        super(InterDomain_Policy, self).__init__()
         self.action_dim = action_space.n
         self.representation = representation
         self.representation_info_shape = representation.output_shapes

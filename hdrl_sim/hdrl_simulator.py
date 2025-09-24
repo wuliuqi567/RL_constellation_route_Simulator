@@ -43,7 +43,7 @@ if __name__ == "__main__":
     env = make_envs(configs_up)
     hdrl_env = env.envs[0].env
     up_agents = []
-    for i in range(1):
+    for i in range(144):
         configs_up.log_dir = configs_up.log_dir + f"agent_{i}/"
         configs_up.model_dir = configs_up.model_dir + f"agent_{i}/"
         up_agents.append(PPOCLIP_Agent(configs_up, env))
@@ -56,9 +56,17 @@ if __name__ == "__main__":
 
         ''' iterate each time step try to finish routing within time_steps '''
         for t in tqdm(range(configs_up.max_steps)):
-
+            # gen new cross-domain flows for walker-delta-net in each domain, and assign them to each up agent according to the destination node
+            # to_be_injected_flows = hdrl_env.walker_delta_net.traffic_manager.tobe_assigned_flows
+            # for flow in to_be_injected_flows:
+            #     print(flow)
+            #     up_agents[flow.destination].train([flow])
+            # 
+            # hdrl_env.walker_delta_net.gen_each_domain_flows
             hdrl_env.update_whole_network_state()
-            
+
+        hdrl_env.train_lower_level_agents()
+
         """ get episode return """
         hdrl_env.upload_episode_rewards()
         hdrl_env.reset()

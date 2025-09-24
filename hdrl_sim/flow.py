@@ -157,7 +157,7 @@ class TrafficFlowsManager:
         self.flows = []
         self.expired_flows = []
         self.tobe_assigned_flows = []
-
+        self.finished_flows = []
     def add_flow(self, flow):
         """
         Add a new traffic flow to the manager.

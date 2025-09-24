@@ -32,6 +32,7 @@ class GNNPPOCLIP_Learner(Learner):
         adv_batch = torch.as_tensor(samples['advantages'], device=self.device)
         old_logp_batch = torch.as_tensor(samples['aux_batch']['old_logp'], device=self.device)
 
+        # print('return batch before normalization:', ret_batch)
         outputs, a_dist, v_pred = self.policy(obs_batch)
         log_prob = a_dist.log_prob(act_batch)
 
@@ -72,6 +73,7 @@ class GNNPPOCLIP_Learner(Learner):
                 "entropy": e_loss.item(),
                 "learning_rate": lr,
                 "predict_value": v_pred.mean().item(),
+                "return": ret_batch.mean().item(),
                 "clip_ratio": cr
             }
 

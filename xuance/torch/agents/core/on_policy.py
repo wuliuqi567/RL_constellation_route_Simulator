@@ -108,6 +108,18 @@ class OnPolicyAgent(Agent):
                 samples = self.memory.sample(sample_idx)
                 train_info = self.learner.update(**samples)
         return train_info
+    
+    def train_episode(self, n_epochs: int = 1) -> dict:
+        indexes = np.arange(self.memory.cur_buf_size)
+        train_info = {}
+        for _ in range(n_epochs):
+            np.random.shuffle(indexes)
+            for start in range(0, self.memory.cur_buf_size, self.batch_size):
+                end = start + self.batch_size
+                sample_idx = indexes[start:end]
+                samples = self.memory.episode_sample(sample_idx)
+                train_info = self.learner.update(**samples)
+        return train_info
 
     def train(self, train_steps: int) -> None:
         obs = self.envs.buf_obs

@@ -17,11 +17,13 @@ from xuance.torch import REGISTRY_Representation, REGISTRY_Learners, Module
 from xuance.torch.utils import nn, NormalizeFunctions, ActivationFunctions, init_distributed_mode
 from gym.spaces import Dict, Space
 import numpy as np
-from hdrl_sim.algorithm.ppolearner import GNNPPOCLIP_Learner
+from hdrl_sim.algorithm.inter_domain_learner import InterDomain_Learner
 # from agent import Agent
 from xuance.common import Optional, Union, DummyOnPolicyBuffer
 import swanlab as wandb
-class GNNPPOCLIP_Agent(OnPolicyAgent):
+
+
+class InterDomainAgent(OnPolicyAgent):
     """The implementation of PPO agent.
 
     Args:
@@ -32,12 +34,12 @@ class GNNPPOCLIP_Agent(OnPolicyAgent):
     def __init__(self,
                  config: Namespace,
                  envs: Union[DummyVecEnv, SubprocVecEnv]):
-        super(GNNPPOCLIP_Agent, self).__init__(config, envs)
+        super(InterDomainAgent, self).__init__(config, envs)
         self.auxiliary_info_shape = {"old_logp": ()}
         self.edge_index = self.envs.get_env_attributes()
         self.memory = self._build_memory(self.auxiliary_info_shape)  # build memory
         self.policy = self._build_policy()  # build policy
-        REGISTRY_Learners["gnnppocliplearner"] = GNNPPOCLIP_Learner
+        REGISTRY_Learners["interdomainlearner"] = InterDomain_Learner
         self.learner = self._build_learner(self.config, self.policy)  # build learner
         
     

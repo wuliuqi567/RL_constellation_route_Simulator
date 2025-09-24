@@ -181,6 +181,11 @@ class SubdomainNetEnv(RawEnvironment):
         observation = self.get_observation()  # 使用统一的观测方法
         # take action. distribute flows based on action
         reward = self.get_reward(path)
+        print('selected path:', path, 'reward:', reward)
+        
+        for each_path in self.paths:
+            each_reward = self.get_reward(each_path)
+            print(f"Path: {each_path}, Reward: {each_reward:.4f}")
 
         terminated = False
         truncated = False 
@@ -450,12 +455,11 @@ class SubdomainNetEnv(RawEnvironment):
                 delays = [edge_data.get('delay', 0) for _, _, edge_data in neighbor_edges]
                 
                 node_features[i, 2] = np.mean(utilizations)
-                node_features[i, 3] = np.mean(delays) / 100.0  # 假设延迟归一化除以100
+                node_features[i, 3] = np.mean(delays)
             else:
-                node_features[i, 2] = 1.0  
-                node_features[i, 3] = 1.0  
-            
-        
+                node_features[i, 2] = 1.0
+                node_features[i, 3] = 1.0
+
         # 2. 构建边特征 (使用预计算的edge_index和adjacency_matrix)
         edges = list(self.subdomain_graph.edges(data=True))
         num_edges = len(edges)
@@ -493,6 +497,7 @@ class SubdomainNetEnv(RawEnvironment):
 
         
         # 确保所有特征值在合理范围内
+        
         node_features = np.clip(node_features, 0.0, 1.0)
         edge_features = np.clip(edge_features, 0.0, 1.0)
         

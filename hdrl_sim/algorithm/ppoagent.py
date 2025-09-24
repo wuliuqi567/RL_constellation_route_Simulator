@@ -118,88 +118,80 @@ class GNNPPOCLIP_Agent(OnPolicyAgent):
 
     def train(self, flows, *args):
         agent_id = args[0] if len(args) > 0 else 0
+        done = args[1] if len(args) > 1 else False
         first_flow = flows[0]
         flow_attribute = {
             "flow_src": first_flow.source,
             "flow_des": first_flow.destination,
-            'flow_bd': first_flow.flow_rate
+            'flow_bd': first_flow.flow_rate,
+            'survival_time': first_flow.survival_time
         }
         self.envs.set_env_attributes(flow_attribute)
         self.envs.reset_obs()
         obs = self.envs.buf_obs
         num_flows = len(flows)
         
-        if self.memory.full:
-            vals = self.get_terminated_values(obs)
-            for i in range(self.n_envs):
-                    self.memory.finish_path(vals[i], i)
-            train_info = self.train_epochs(n_epochs=self.n_epochs)
-            # self.log_infos(train_info, self.current_step)
-            self.memory.clear()
-        
-        
+        # 处理所有flows
         for idx, flow in enumerate(flows):
-            # step_info = {}
-            
             self.obs_rms.update(obs)
             obs = self._process_observation(obs)
             policy_out = self.action(obs, return_dists=False, return_logpi=True)
             acts, value, logps = policy_out['actions'], policy_out['values'], policy_out['log_pi']
             next_obs, rewards, terminals, trunctions, infos = self.envs.step(acts)
+            if idx == (num_flows - 1) and done:
+                terminals = np.array([True]*self.n_envs)
             flow_path = infos[0].get('flow_path', [])
             flow.path = flow_path
             aux_info = self.get_aux_info(policy_out)
             self.memory.store(obs, acts, self._process_reward(rewards), value, terminals, aux_info)
+            
+            # 更新观察值以供下一个flow使用
             if (idx + 1) < num_flows:
                 flow_attribute = {
                     "flow_src": flows[idx+1].source,
                     "flow_des": flows[idx+1].destination,
-                    'flow_bd' : flows[idx+1].flow_rate
+                    'flow_bd' : flows[idx+1].flow_rate,
+                    'survival_time': first_flow.survival_time
                 }
                 self.envs.set_env_attributes(flow_attribute)
                 self.envs.reset_obs()
                 obs = self.envs.buf_obs
-            
-            
-                if self.memory.full:
-                    vals = self.get_terminated_values(obs)
-                    for i in range(self.n_envs):
-                        if terminals[i]:
-                            self.memory.finish_path(0.0, i)
-                        else:
-                            self.memory.finish_path(vals[i], i)
-                    train_info = self.train_epochs(n_epochs=self.n_epochs)
-                    # self.log_infos(train_info, self.current_step)
-                    for k, v in train_info.items():
-                        if v is None:
-                            continue
-                        wandb.log({f"agent_{agent_id}/{k}": v}, step=self.current_step)
-                    self.memory.clear()
+
 
             self.returns = self.gamma * self.returns + rewards
-
-            # for i in range(self.n_envs):
-            #     if terminals[i] or trunctions[i]:
-            #         self.ret_rms.update(self.returns[i:i + 1])
-            #         self.returns[i] = 0.0
-            #         if self.atari and (~trunctions[i]):
-            #             pass
-            #         else:
-            #             if terminals[i]:
-            #                 self.memory.finish_path(0.0, i)
-            #             else:
-            #                 vals = self.get_terminated_values(next_obs)
-            #                 self.memory.finish_path(vals[i], i)
-            #             obs[i] = infos[i]["reset_obs"]
-            #             self.envs.buf_obs[i] = obs[i]
-            #             self.current_episode[i] += 1
-            #             step_info = {}
-                        # if self.use_wandb:
-            #                 step_info["Episode-Steps/env-%d" % i] = infos[i]["episode_step"]
-            #                 step_info["Train-Episode-Rewards/env-%d" % i] = infos[i]["episode_score"]
-            #             else:
-            #                 step_info["Episode-Steps"] = {"env-%d" % i: infos[i]["episode_step"]}
-            #                 step_info["Train-Episode-Rewards"] = {"env-%d" % i: infos[i]["episode_score"]}
-            #             self.log_infos(step_info, self.current_step)
             self.current_step += self.n_envs
+            
+            if idx == (num_flows - 1) and done:
+                # 如果是最后一个flow且done为True，结束当前episode
+                for i in range(self.n_envs):
+                    
+                    self.memory.finish_path(0.0, i)
+        
+        # # 所有flows处理完成后，检查是否需要训练
+        # if self.memory.full:
+        #     # 获取最终状态的价值估计用于bootstrap
+        #     vals = self.get_terminated_values(obs)
+        #     for i in range(self.n_envs):
+        #         if terminals[i]:
+        #             # 如果episode结束，最终价值为0
+        #             self.memory.finish_path(0.0, i)
+        #         else:
+        #             # 如果episode未结束，使用价值函数估计
+        #             self.memory.finish_path(vals[i], i)
+            
+        #     # 执行训练
+        #     train_info = self.train_epochs(n_epochs=self.n_epochs)
+        #     for k, v in train_info.items():
+        #         if v is None:
+        #             continue
+        #         wandb.log({f"agent_{agent_id}/{k}": v}, step=self.current_step)
+        #     self.memory.clear()
 
+    def episode_train(self, agent_id):
+        
+        train_info = self.train_episode(n_epochs=self.n_epochs)
+        for k, v in train_info.items():
+            if v is None:
+                continue
+            wandb.log({f"agent_{agent_id}/{k}": v}, step=self.current_step)
+        self.memory.clear()

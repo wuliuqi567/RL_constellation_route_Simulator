@@ -22,9 +22,12 @@ def satellite_connection_graph(constellation_name, sh, t):
     G.add_nodes_from(satellite_nodes)  # add nodes to graph
 
      # 添加边及多个属性
+    delay_max = 0
     for i in range(1, len(delay), 1):
         for j in range(i + 1, len(delay), 1):
             if delay[i][j] > 0:
+                if delay[i][j] > delay_max:
+                    delay_max = delay[i][j]
                 # 计算其他属性
                 distance = delay[i][j] * 299792458  # 假设延迟转换为距离
                 capacity = 2000  # 默认容量，单位为Mbps
@@ -43,7 +46,7 @@ def satellite_connection_graph(constellation_name, sh, t):
                     utilization=0.0,  # 初始利用率 占用的带宽/总容量（带宽）
                     available_bandwidth=capacity
                 )
-
+    print(f"Max delay in shell {sh.shell_name} at time {t}: {delay_max} seconds")
     return G
     
 def determine_link_type(sat1, sat2, shell):

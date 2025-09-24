@@ -9,11 +9,11 @@ from xuance.torch.learners import Learner
 from argparse import Namespace
 
 
-class GNNPPOCLIP_Learner(Learner):
+class InterDomain_Learner(Learner):
     def __init__(self,
                  config: Namespace,
                  policy: nn.Module):
-        super(GNNPPOCLIP_Learner, self).__init__(config, policy)
+        super(InterDomain_Learner, self).__init__(config, policy)
         self.optimizer = torch.optim.Adam(self.policy.parameters(), self.config.learning_rate, eps=1e-5)
         self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer,
                                                            start_factor=1.0,
@@ -31,6 +31,13 @@ class GNNPPOCLIP_Learner(Learner):
         ret_batch = torch.as_tensor(samples['returns'], device=self.device)
         adv_batch = torch.as_tensor(samples['advantages'], device=self.device)
         old_logp_batch = torch.as_tensor(samples['aux_batch']['old_logp'], device=self.device)
+        
+        print('return batch before normalization:', ret_batch)
+        # Standardize returns: G_t' = (G_t - mean(G)) / (std(G) + ε)
+        ret_mean = ret_batch.mean()
+        ret_std = ret_batch.std()
+        eps = 1e-8  # Small constant to prevent division by zero
+        ret_batch_normalized = (ret_batch - ret_mean) / (ret_std + eps)
 
         outputs, a_dist, v_pred = self.policy(obs_batch)
         log_prob = a_dist.log_prob(act_batch)
@@ -41,7 +48,8 @@ class GNNPPOCLIP_Learner(Learner):
         surrogate2 = adv_batch * ratio
         a_loss = -torch.minimum(surrogate1, surrogate2).mean()
 
-        c_loss = self.mse_loss(v_pred, ret_batch.detach())
+        # Use normalized returns for critic loss
+        c_loss = self.mse_loss(v_pred, ret_batch_normalized.detach())
 
         e_loss = a_dist.entropy().mean()
         loss = a_loss - self.ent_coef * e_loss + self.vf_coef * c_loss

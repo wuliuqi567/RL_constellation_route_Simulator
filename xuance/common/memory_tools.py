@@ -204,6 +204,10 @@ class DummyOnPolicyBuffer(Buffer):
     @property
     def full(self):
         return self.size >= self.n_size
+    
+    @property
+    def cur_buf_size(self):
+        return self.size * self.n_envs
 
     def clear(self):
         self.ptr, self.size = 0, 0
@@ -249,7 +253,7 @@ class DummyOnPolicyBuffer(Buffer):
 
         self.returns[i, path_slice] = returns
         self.advantages[i, path_slice] = advantages
-        self.start_ids[i] = self.ptr
+        # self.start_ids[i] = self.ptr
 
     def sample(self, indexes):
         assert self.full, "Not enough transitions for on-policy buffer to random sample"
@@ -271,6 +275,43 @@ class DummyOnPolicyBuffer(Buffer):
             'advantages': adv_batch
         })
 
+        return samples_dict
+    
+    def episode_sample(self, indexes):
+        """
+        Sample function that works even when buffer is not full.
+        
+        Args:
+            indexes: sample indexes
+            
+        Returns:
+            samples_dict: sampled data dictionary
+        """
+        if self.size == 0:
+            raise ValueError("Buffer is empty, cannot sample")
+        
+        # Ensure indexes are within valid range
+        valid_size = self.size * self.n_envs
+        indexes = indexes % valid_size
+        
+        env_choices, step_choices = divmod(indexes, self.size)
+        
+        samples_dict = {
+            'obs': sample_batch(self.observations, tuple([env_choices, step_choices])),
+            'actions': sample_batch(self.actions, tuple([env_choices, step_choices])),
+            'returns': sample_batch(self.returns, tuple([env_choices, step_choices])),
+            'values': sample_batch(self.values, tuple([env_choices, step_choices])),
+            'aux_batch': sample_batch(self.auxiliary_infos, tuple([env_choices, step_choices])),
+            'batch_size': len(indexes),
+        }
+        
+        adv_batch = sample_batch(self.advantages, tuple([env_choices, step_choices]))
+        if self.use_advnorm and len(adv_batch) > 1:
+            adv_batch = (adv_batch - np.mean(adv_batch)) / (np.std(adv_batch) + 1e-8)
+        samples_dict.update({
+            'advantages': adv_batch
+        })
+        
         return samples_dict
 
 

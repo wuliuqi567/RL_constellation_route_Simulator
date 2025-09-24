@@ -11,7 +11,7 @@ from xuance.torch.utils.operations import set_seed
 from hdrl_sim.algorithm.ppoagent import GNNPPOCLIP_Agent
 from xuance.environment import make_envs
 from xuance.common import create_directory, get_time_string
-import os
+import os, random
 import socket
 import argparse
 import swanlab as wandb
@@ -34,13 +34,24 @@ class HdrlEnv(RawEnvironment):
         self.max_episode_steps = 32  # The max episode length.
         self._current_step = 0  # The count of steps of current episode.
         
+        self.sim_time = 0  # the simulation time
+        self.max_sim_time = env_config.max_steps
         self.walker_delta_net = WalkerDeltaNet()
 
         
         self.configs = env_config
         # create neural network for each domain
         self.ndomains = len(self.walker_delta_net.all_domains)
-        # init all domians' nn model
+        
+        self.net_graph = self.walker_delta_net.get_net_graph()
+
+        self.flow_src = random.choice(list(self.net_graph.nodes()))
+        self.flow_des = random.choice(list(self.net_graph.nodes()))
+        self.flow_bd = 0
+        self.survival_time = 7
+        self.paths = None
+        self.cur_pos = self.flow_src
+        
         
         from xuance.environment import REGISTRY_ENV
         REGISTRY_ENV[low_env_configs.env_name] = SubdomainNetEnv
@@ -112,17 +123,10 @@ class HdrlEnv(RawEnvironment):
                 except:
                     self.writer.add_scalars(k, v, x_index)
 
-    def init_neural_network(self):
-        temp_model = []
-        for i in range(self.ndomains):
-            temp_dqn = 0 # NeuralNetwork(i, self.nnodes, self.input_q_size)
-            temp_model.append(temp_dqn)
-        return temp_model
-        
 
     def reset(self, **kwargs):  # Reset your environment.
         self._current_step = 0
-        
+        self.sim_time = 0  # the simulation time
         self.walker_delta_net.reset_net()
         for env in self.envs:
             env.reset()
@@ -146,6 +150,39 @@ class HdrlEnv(RawEnvironment):
         truncated = False if self._current_step < self.max_episode_steps else True
         info = {}
         return observation, rewards, terminated, truncated, info
+    
+    
+    def step_v2(self, action, flow):
+        # take action. distribute flows based on action
+        self._current_step += 1
+        
+        # self.cur_node = 
+
+        # 解析当前 action 对应的域间链路和下一跳节点
+        # if 下一跳节点对应的域，如果是目的域，则路径选择结束
+            # lower_level_agent receives the destination node of the flow, then execute the action, return the reward
+            # up reward = 0 + down reward
+        # else:
+        #     lower_level_agent receives the next hop node of the flow, then execute the action, return the reward
+        #     up reward = weighted sum of the delay and utilization of the inter-domain links + down reward
+        
+        # execute action in the environment
+        
+        # The reward equals the weighted sum of the delay and utilization of the inter-domain links.
+        up_reward = self.get_up_reward()
+        rewards = up_reward + self.get_down_reward()
+        
+        # 
+        
+        observation = self.observation_space.sample()
+        
+        terminated = False
+        truncated = False if self._current_step < self.max_episode_steps else True
+        info = {}
+        return observation, rewards, terminated, truncated, info
+        
+        
+        
 
     def render(self, *args, **kwargs):  # Render your environment and return an image if the render_mode is "rgb_array".
         return np.ones([64, 64, 64])
@@ -168,18 +205,25 @@ class HdrlEnv(RawEnvironment):
         # to_be_injected_flows = self.walker_delta_net.traffic_manager.tobe_assigned_flows
 
         # to_be_injected_flows = self.walker_delta_net.traffic_manager.tobe_assigned_domain_flows
-
+        done = True if self.sim_time >= self.max_sim_time else False
+        
         for idx in range(self.ndomains):
-            self.walker_delta_net.gen_each_domain_flows(idx, arrival_rate=30)
+            self.walker_delta_net.gen_each_domain_flows(idx, arrival_rate=25)
             to_be_injected_flows = self.walker_delta_net.traffic_manager.tobe_assigned_flows
-            
-            self.agents[idx].train(to_be_injected_flows, idx)
+
+            self.agents[idx].train(to_be_injected_flows, idx, done)
             self.walker_delta_net.traffic_manager.merge_assigned_flows()
             
+    def train_lower_level_agents(self):
+        for idx, agent in enumerate(self.agents):
+            agent.episode_train(idx)
+     
      
     def update_whole_network_state(self):
+        self.sim_time += 1
         self.update_flows()
         self.inject_new_flows()
+        
         
 
     
@@ -212,5 +256,4 @@ class HdrlEnv(RawEnvironment):
             
     # get all edges' utilization
     def get_edges_utilization(self):
-        utilization = self.walker_delta_net.get_edges_utilization()
-        # print(utilization)
+        self.walker_delta_net.get_edges_utilization()
